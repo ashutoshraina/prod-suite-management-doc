@@ -19,13 +19,12 @@ In a heterogeneous distributed system it is often necessary to interface with an
 We will deploy a Lagom application and WebSphere Application to Kubernetes. Both the applications will be containerized using docker.
 The Lagom application is written in Scala. The WebSphere application uses Java and Servlets. We will show simple interactions between the applications by invoking restful endpoints in these applications. We will also show the steps involved in building this setup.
 
-Briefly we will follow the following steps:
+Briefly, we will perform the following steps:
 
-* Running an application on Kubernetes requires containerization.
-* Lagom systems, being composed of many microservices, will require many [Docker](https://www.docker.com/) images to be created.
-* WebSphere Liberty based application will also be dockerized before deploying to Kubernetes.
-* Lagom applications will make use of [Service Locator](https://www.lagomframework.com/documentation/1.3.x/java/ServiceLocator.html)
-that must tie in with the DNS facilities that Kubernetes provides.
+* Establishing a Kubernetes cluster.
+* Lagom systems will require [Docker](https://www.docker.com/) images to be created.
+* A WebSphere Liberty based application will also be dockerized before deploying to Kubernetes.
+* Apply a DNS [Service Locator](https://www.lagomframework.com/documentation/1.3.x/java/ServiceLocator.html) for discovering services on Kubernetes.
 
 ## The Solution
 
@@ -45,9 +44,9 @@ machine:
 * A clone of the [lagom-liberty](https://github.com/typesafehub/prod-suite-management-doc/tree/master/guides/lagom-liberty-websphere/lagom-liberty)
 
 #### Liberty and Lagom Application
-Once you clone [lagom-liberty](https://github.com/typesafehub/prod-suite-management-doc/tree/master/guides/lagom-liberty-websphere/lagom-liberty), you will see two application 1) Liberty and 2) Lagom.
-The original source of the liberty application is here [WASDev:Servlet](https://github.com/WASdev/sample.servlet). 
-We have modified the code to another Servlet(`ExampleServlet`). This servlet simply makes a HTTP call to the lagom api and processes the response.
+Once you clone [lagom-liberty](https://github.com/typesafehub/prod-suite-management-doc/tree/master/guides/lagom-liberty-websphere/lagom-liberty), you will see two applications 1) Liberty; and 2) Lagom.
+The original source of the liberty application is the [WASDev:Servlet](https://github.com/WASdev/sample.servlet). 
+This servlet simply makes a HTTP call to the lagom api and processes the response.
 In the lagom application we have added a service binding to tie the liberty service to the lagom application. There is additional configuration required so that the services can discover each other. We will go through this aspect in the next section.
 
 #### Service Discovery
@@ -55,7 +54,7 @@ In the lagom application we have added a service binding to tie the liberty serv
 Lagom makes use of a [Service Locator](https://www.lagomframework.com/documentation/1.3.x/java/ServiceLocator.html) to
 call other services within the system. The Lagom application is configured to use the [scala-service-locator-dns](https://github.com/typesafehub/service-locator-dns) project to provide a service locator that takes advantage of Kubernetes [Service Discovery](https://kubernetes.io/docs/concepts/services-networking/service/#discovering-services). It is also available for Java [scala-service-locator-dns](https://github.com/typesafehub/service-locator-dns).
 
-Because the names of the service locators will not exactly match the DNS SRV address, `service-locator-dns` has
+Because the names of the service locators will not exactly match the [DNS SRV](https://en.wikipedia.org/wiki/SRV_record) address, `service-locator-dns` has
 the ability to translate addresses. The Lagom application uses this feature to ensure, for example, a service lookup for `libertyservice`
 will be translated into a DNS SRV lookup for `_liberty-api._tcp.libertyservice.default.svc.cluster.local`. The Lagom application
 is configured with the following configuration in `application.conf`:
@@ -64,14 +63,12 @@ is configured with the following configuration in `application.conf`:
 
 Notice, the name of the service (`libertyservice`) and the name of the port(`liberty-api`) that we have used in the configuration. These names must match the names in the Kubernetes resource files, otherwise the service discovery will fail.
 
-_Refer to the various `application.conf` files in the Lagom-Liberty repository for more details._
+> Refer to the various `application.conf` files in the Lagom-Liberty repository for more detail on the DNS SRV configuration.
 
 ## Deployment
 
 Now that all the resources required for deployment have been described, this guide will cover how to automate the process
-of deploying them to Kubernetes.
-
-Deploying Chirper requires the following actions:
+of deploying them to Kubernetes. Deploying our services requires the following actions:
 
 1. Setup Kubernetes
 2. Build and Deploy Lagom Application
@@ -129,40 +126,31 @@ kubectl get nodes
 
 -------------------------
 
-## 2. Build Lagom Application Image
+## 2. Build the Lagom Application Image
 
 Applications must be packaged as Docker images to be deployed to Kubernetes. This can be accomplished
-with both sbt and Maven build tools, both covered below.
+with both sbt and Maven build tools, with sbt covered below.
 
 > For general assistance on setting up your Lagom build please refer to ["Defining a Lagom Build" in the Lagom documentation](https://www.lagomframework.com/documentation/1.3.x/scala/LagomBuild.html).
 
 ----------------------------------
 
-###### sbt
-
 By using [sbt native packager](https://github.com/sbt/sbt-native-packager) Lagom-Liberty is configured
-to be able to build Docker images. The command below will build Chirper and the Docker images using
+to be able to build Docker images. The command below will build our service and the Docker images using
 sbt and this plugin.
 
 <pre class="code-bash prettyprint prettyprinted">
 sbt clean docker:publishLocal
 </pre>
 
-_Refer to `build.sbt` in the [Lagom-Liberty Repository](https://github.com/typesafehub/prod-suite-management-doc/tree/master/guides/lagom-liberty-websphere/lagom-liberty) for more details._
+> Refer to `build.sbt` in the [Lagom-Liberty Repository](https://github.com/typesafehub/prod-suite-management-doc/tree/master/guides/lagom-liberty-websphere/lagom-liberty) for more details.
 
-## 3. Build WebSphere Liberty Application Image
-We will build the WebSphere liberty docker image by using the base docker image available on the docker hub [WebSphere Liberty Docker] (https://docs.docker.com/samples/library/websphere-liberty/). The docker image will contain the war file built using `mvn`. 
+## 3. Build the WebSphere Liberty Application Image
+We will build the WebSphere liberty docker image by using the base docker image available on the docker hub [WebSphere Liberty Docker] (https://docs.docker.com/samples/library/websphere-liberty/). The docker image will contain the war file built using [Maven](https://maven.apache.org/). 
 The following command can be run from the base  directory to achieve this. You can also refer to the dockerfile in the liberty directory for completeness.
  
 <pre class="code-bash prettyprint prettyprinted">
 mvn -f liberty/pom.xml clean package install && docker build -t liberty-app liberty
-</pre>
-
-
-We can also combine Steps 2 & 3 together.
-
-<pre class="code-bash prettyprint prettyprinted">
-sbt clean docker:publishLocal && mvn -f liberty/pom.xml clean package install && docker build -t liberty-app liberty
 </pre>
 
 To check that the docker images are created successfully, you can use the `docker images` command.
@@ -192,8 +180,12 @@ gcr.io/google_containers/pause-amd64                   3.0                 99e59
 After Step 3, we have the docker images which can be deployed to Kubernetes. The Lagom-Liberty repository has the Kubernetes resources which we will use to create the stateful-sets for Lagom and Liberty application. We will also use Nginx for ingress. 
 
 <pre class="code-bash prettyprint prettyprinted">
-kubectl create -f deploy/resources/lagom && kubectl create -f deploy/resources/nginx && kubectl create -f deploy/resources/liberty
+kubectl create -f deploy/resources/lagom && \
+  kubectl create -f deploy/resources/nginx && \
+  kubectl create -f deploy/resources/liberty
 </pre>
+
+...which then yields the following output:
 
 ```bash
 service "lagomservice" created
@@ -240,7 +232,7 @@ rs/nginx-ingress-controller-667491271   1         1         0         18s
 ```
 You can inspect the resource file in the Lagom-Liberty repository under the deploy folder.
 
-_Refer to the files in the Lagom-Liberty repository at `deploy/resources/chirper` for more details._
+> Refer to the files in the Lagom-Liberty repository at `deploy/resources/chirper` for more details.
 
 Next, we will describe the important steps we took so that applications are discoverable to each other.
 
@@ -250,24 +242,25 @@ You can read more about these here [Kubernetes-DNS]("https://kubernetes.io/docs/
 
 
 #### Lagom to Liberty
-We will use the [ServiceLocator-DNS] ("https://github.com/typesafehub/service-locator-dns/") library. In development mode it is sufficient to map the service name (libertyservice) to any url.
-The `LagomLoader` has been modified to use the `DNSServiceLocator`. Lagom will automatically try and use service-locator dns. 
+We will use the [ServiceLocator-DNS] ("https://github.com/typesafehub/service-locator-dns/") library. In development mode it is sufficient to map the service name (`libertyservice`) to any url.
+The `LagomLoader` has been modified to use the `DNSServiceLocator`. Lagom will automatically try and use service-locator-dns. 
 
 #### Liberty to Lagom
-The Liberty application will discover the Lagom application using the combination of environment variables and DNS-SRV translation.
-The environment variables are set in the LibertyStateful set resource.
+The Liberty application will discover the Lagom application using the combination of environment variables and DNS SRV translation.
+The environment variables are set by the `LibertyStateful` set resource.
+
 ```
- {
-        "name": "LAGOM_SERVICE",
-        "value": "_http-lagom-api._tcp.lagomservice.default.svc.cluster.local"
- }
+{
+  "name": "LAGOM_SERVICE",
+  "value": "_http-lagom-api._tcp.lagomservice.default.svc.cluster.local"
+}
 ```
 We translate this DNS-SRV record using DNS library [Spotify-DNS]("https://github.com/spotify/dns-java").
 
 ## 6. Understanding the Kubernetes Resources
 
-Now, we have deployed Lagom and Liberty applications in the cluster. Next, we will determine the urls we can use to access the applications.
-Next, we will list the service to find the Kubernetes dashboard and the nginx ingress.
+We have now deployed the Lagom and Liberty applications in the cluster. Next, we will determine the urls we can use to access the applications.
+After that, we will list the service to find the Kubernetes dashboard and the `nginx` proxy ingress.
 
 <pre class="code-bash prettyprint prettyprinted">
 minikube service list
@@ -291,9 +284,7 @@ If we access the dashboard at http://192.168.99.100:30000 then we will be able t
 
 ## 7. Confirming Our Deployments
 
-We will confirm our deployments by hitting the Lagom and Liberty deployments. We will use the nginx ingress urls for this.
-
-Hit http://192.168.99.105:31627/lagom/toLiberty to see lagom talk to the liberty application. You should see the following.
+We will confirm our deployments by hitting the Lagom and Liberty deployments. We will use the nginx ingress urls for this. Hit http://192.168.99.105:31627/lagom/toLiberty to see lagom talk to the liberty application. You should see the following:
 
 ```
 External Service Replied with --- 
@@ -301,7 +292,7 @@ Served at: /sample.servlet
 Hello, from a Servlet!
 ```
 
-Hit http://192.168.99.105:31627/sample.servlet/example to see liberty talk to lagom. You should see the following.
+Hit http://192.168.99.105:31627/sample.servlet/example to see liberty talk to lagom. You should see the following:
 
 ```
 Hello liberty
